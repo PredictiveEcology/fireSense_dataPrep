@@ -431,7 +431,6 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
           prepClimLays <- TRUE
         }
       }
-      devtools::load_all(file.path(dirname(getwd()), "usefulFuns"))
       if (prepClimLays){
         sim$MDC06 <- usefulFuns::prepareClimateLayers(authEmail = sim$usrEmail,
                                           pathInputs = inputPath(sim), 
