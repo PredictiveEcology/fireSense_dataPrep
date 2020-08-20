@@ -413,17 +413,13 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
     },
     prepSpreadPredictData = {
     currentCohortData  <- copy(sim$cohortData)
-    print(currentCohortData)
     classCohorts <- classifyCohortsFireSenseSpread(cohortData = currentCohortData,
                                                    year = time(sim),
                                                    pixelGroupMap = sim$pixelGroupMap,
                                                    flammable = sim$flammableRTM)
-    print(classCohorts)
     sim$dataFireSense_SpreadPredict <- raster::stack(classCohorts)
     # We need to: 
     # 1) Add zeros to where we don't have proportions (currently NA)
-    print(sim$dataFireSense_SpreadPredict)
-    print(names(sim$dataFireSense_SpreadPredict))
     spreadPredDataNames <- names(sim$dataFireSense_SpreadPredict)
     sim$dataFireSense_SpreadPredict <- lapply(spreadPredDataNames, 
                                                     function(rasName){
@@ -431,7 +427,6 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       ras[rasterToMatch[] == 1 & is.na(ras[])] <- 0 
       return(ras)
     })
-    print(sim$dataFireSense_SpreadPredict)
     sim$dataFireSense_SpreadPredict <- raster::stack(sim$dataFireSense_SpreadPredict)
     # 2) Assert that all proportions sum to 1
     summedRas <- sum(sim$dataFireSense_SpreadPredict)
