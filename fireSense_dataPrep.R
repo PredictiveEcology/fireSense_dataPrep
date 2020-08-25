@@ -51,11 +51,13 @@ defineModule(sim, list(
                     min = NA, max = NA, 
                     desc = paste("Which DEM resolution was used for generating the climate layers?",
                                  "Default to '3ArcMin'.")),
-    defineParameter(name = "climateFilePath", class = "character", 
+    defineParameter(name = "projectedClimateFilePath", class = "character", 
                     default = "https://drive.google.com/open?id=17idhQ_g43vGUQfT-n2gLVvlp0X9vo-R8", 
                     min = NA, max = NA, 
                     desc = paste("URL to zipped climate file coming from ClimateNA, containing all",
-                                 "climate variables for all years of simulation")),
+                                 "projected climate variables for all years of simulation")),
+    defineParameter(name = 'historicalClimateDataInputPath', class = 'character', 'inputs', NA, NA, 
+                    desc = 'path to directory containing historical climate data'), #TODO: how could this work?
     defineParameter(name = "train", class = "logical", default = TRUE,
                     desc = "train or predict mode. Defaults is TRUE, or train mode.")
   ),
@@ -99,7 +101,10 @@ defineModule(sim, list(
     expectsInput(objectName = "rstLCC",
                  objectClass = "RasterLayer",
                  sourceURL = NA,
-                 desc = "Raster of land cover. Defaults to LCC05.")
+                 desc = "Raster of land cover. Defaults to LCC05."),
+    expectsInput(objectName = 'MDC',
+                 objectClass = 'RasterStack',
+                 desc = 'historical annual maximum MDC (calculated monthly) raster stack')
   ),
   outputObjects = bind_rows(
     createsOutput(objectName = "dataFireSense_IgnitionFit", 
@@ -110,30 +115,29 @@ defineModule(sim, list(
                   objectClass = "RasterStack", 
                   desc = paste0("One or more RasterLayers or RasterStacks in which to look for ",
                                 "variables present in the model formula.")),
-    createsOutput(objectName = "dataFireSense_SpreadFit", 
-                  objectClass = "RasterStack", 
+    createsOutput(objectName = "dataFireSense_SpreadFit",
+                  objectClass = "RasterStack",
                   desc = paste0("One or more RasterLayers or RasterStacks in which to look for ",
                                 "variables present in the model formula.")),
-    createsOutput(objectName = "dataFireSense_IgnitionPredict", 
-                  objectClass = "RasterStack", 
+    createsOutput(objectName = "dataFireSense_IgnitionPredict",
+                  objectClass = "RasterStack",
                   desc = paste0("One or more RasterLayers or RasterStacks in which to look for ",
                                 "variables present in the model formula.")),
-    createsOutput(objectName = "dataFireSense_EscapePredict", 
-                  objectClass = "RasterStack", 
+    createsOutput(objectName = "dataFireSense_EscapePredict",
+                  objectClass = "RasterStack",
                   desc = paste0("One or more RasterLayers or RasterStacks in which to look for ",
                                 "variables present in the model formula.")),
-    createsOutput(objectName = "dataFireSense_SpreadPredict", 
-                  objectClass = "RasterStack", 
+    createsOutput(objectName = "dataFireSense_SpreadPredict",
+                  objectClass = "RasterStack",
                   desc = paste0("One or more RasterLayers or RasterStacks in which to look for ",
                                 "variables present in the model formula.")),
-    createsOutput(objectName = "MDC06", 
-                  objectClass = "RasterStack", 
+    createsOutput(objectName = "MDC06",
+                  objectClass = "RasterStack",
                   desc = paste0("Calculated MDC for June ",
                                 "To be used by ignition, escape(?) and spread predictions.")),
-    expectsInput(objectName = "rstLCC",
-                 objectClass = "RasterLayer",
-                 sourceURL = NA,
-                 desc = "Raster of land cover. Defaults to LCC05.")
+    createsOutput(objectName = "rstLCC",
+                  objectClass = "RasterLayer",
+                  desc = "Raster of land cover. Defaults to LCC05.")
     )
 ))
 
@@ -158,24 +162,24 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # Improving the water and wetlands locations
       sim$rstLCC[sim$wetLCC == 1] <- 37 # LCC05 code for Water bodies
       sim$rstLCC[sim$wetLCC == 2] <- 19 # LCC05 code for Wetlands
-      
-      if (P(sim)$train){
-        message("train is TRUE, preparing RTM. This should happen only if dataFireSense_EscapeFit 
-            \nand dataFireSense_FrequencyFit are not being passed.")
-        mod[["RTM"]] <- Cache(
-          aggregate,
-          sim[["rstLCC"]],
-          fact = P(sim)$res / xres(sim[["rstLCC"]]),
-          fun = function(x, ...) if (anyNA(x)) NA else 1
-        )
-        
-        mod[["PX_ID"]] <- tibble(PX_ID = which(!is.na(mod[["RTM"]][])))
-        
-        mod[["RTM_VT"]] <- bind_cols(
-          st_as_sf(rasterToPolygons(mod[["RTM"]])),
-          mod[["PX_ID"]]
-        )
-      }
+      browser()
+      # if (P(sim)$train){
+      #   message("train is TRUE, preparing RTM. This should happen only if dataFireSense_EscapeFit 
+      #       \nand dataFireSense_FrequencyFit are not being passed.")
+      #   mod[["RTM"]] <- Cache(
+      #     aggregate,
+      #     sim[["rstLCC"]],
+      #     fact = P(sim)$res / xres(sim[["rstLCC"]]),
+      #     fun = function(x, ...) if (anyNA(x)) NA else 1
+      #   )
+      #   
+      #   mod[["PX_ID"]] <- tibble(PX_ID = which(!is.na(mod[["RTM"]][])))
+      #   
+      #   mod[["RTM_VT"]] <- bind_cols(
+      #     st_as_sf(rasterToPolygons(mod[["RTM"]])),
+      #     mod[["PX_ID"]]
+      #   )
+      # }
       # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       
       # schedule future event(s)
@@ -195,8 +199,8 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
     prepIgnitionFitData = {
       # TODO when we work with IgnitionFit
       
-      if (P(sim)$train){ # From fireSense_NWT_DataPrep. NEEDS REVISION!!!
-        
+      if (P(sim)$train) { # From fireSense_NWT_DataPrep. NEEDS REVISION!!!
+        #need to fix this function
         sim <- PrepThisYearMDC(sim) 
         sim <- PrepThisYearFire(sim)
         
@@ -216,26 +220,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       names(fireYears) <- as.character(fireYears)
       # plan("multiprocess", workers = length(fireYears))
 
-      if (!file.exists(file.path(Paths$inputPath, "MDC_1991_2017.rds"))){
-        # This file NWT_3ArcMinuteM comes from downloading the specific data from ClimateNA.
-        # While there isn't an API for it, this is a manual step. You will need the DEM for the area
-        # and specify which variables you want (in our case, monthly variables)
-        MDC <- Cache(calculateMDC, pathInputs = file.path(Paths$inputPath),
-                     years = c(fireYears), doughtMonths = 4:9, rasterToMatch = pixelGroupMap2001,
-                     userTags = c("MDC_1991_2017", "normals_MDC"))
-
-        saveRDS(MDC, file.path(Paths$inputPath, "MDC_1991_2017.rds"))
-      } else {
-        MDC <- readRDS(file.path(Paths$inputPath, "MDC_1991_2017.rds"))
-        # Fixing Caching and moving rasters problem
-        if (!file.exists(filename(MDC$Year1991$MDC_1991$MDC_1991))) 
-          MDC <- lapply(MDC, function(yr) {
-            r <- yr[[1]]
-            r@file@name <- gsub("^.*(MDC_.*)$", file.path(Paths$inputPath, "\\1"), 
-                                yr[[1]][[1]]@file@name)
-            return(r)
-          })
-      }
+      #Ian this is where the old MDC was created
       
       # For now, we will assume the landscape and proportions of species don't change for @ 15 years
       # and we use all the dataset 1991-2017 to fit the spread model, using 2001 and 2011 layers
@@ -246,13 +231,13 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # Create the classification. Repeat with 2011
       # source(file.path(getwd(), "modules/fireSense_dataPrep/R/classifyCohortsFireSenseSpread.R')) 
       # Needs to be: 1) made flexible; 2) put in fireSenseUtils
-      classList2001 <- classifyCohortsFireSenseSpread(cohortData2001,
+      classList2001 <- classifyCohortsFireSenseSpread(sim$cohortData2001,
                                                       year = 2001,
-                                                      pixelGroupMap = pixelGroupMap2001,
+                                                      pixelGroupMap = sim$pixelGroupMap2001,
                                                       flammable = flammableRTM)
-      classList2011 <- classifyCohortsFireSenseSpread(cohortData2011,
+      classList2011 <- classifyCohortsFireSenseSpread(sim$cohortData2011,
                                                       year = 2011,
-                                                      pixelGroupMap = pixelGroupMap2011,
+                                                      pixelGroupMap = sim$pixelGroupMap2011,
                                                       flammable = flammableRTM)
       
       # Assign values from 2001 and 2011 veg input layers to annual data
@@ -273,7 +258,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       nonAnnualRasters <- mapply(c, classList, SIMPLIFY = FALSE)
       nonAnnualStacks <- lapply(nonAnnualRasters, raster::stack)
       rm(nonAnnualRasters)
-      sim$dataFireSense_SpreadFit <-list(annualStacks = annualStacks, 
+      sim$dataFireSense_SpreadFit <- list(annualStacks = annualStacks, 
                                          nonAnnualStacks = nonAnnualStacks) 
       
       ######################################
@@ -286,14 +271,14 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                        " `usrEmail` for google authentication"))
       
       prepClimLays <- FALSE
-      if (is.null(sim$MDC06)){
+      if (is.null(sim$MDC06)) {
         prepClimLays <- TRUE
       } else {
-        if (attr(sim$MDC06, "YEAR") != time(sim)){
+        if (attr(sim$MDC06, "YEAR") != time(sim)) {
           prepClimLays <- TRUE
         }
       }
-      if (prepClimLays){
+      if (prepClimLays) {
         sim$MDC06 <- usefulFuns::prepareClimateLayers(authEmail = sim$usrEmail,
                                                       pathInputs = inputPath(sim), 
                                                       studyArea = sim$studyArea,
@@ -304,7 +289,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                                       RCP = P(sim)$RCP,
                                                       climateModel = P(sim)$climateModel,
                                                       ensemble = P(sim)$ensemble, 
-                                                      climateFilePath = P(sim)$climateFilePath,
+                                                      climateFilePath = P(sim)$projectedClimateFilePath,
                                                       fileResolution = P(sim)$climateResolution)
         sim$MDC06 <- sim$MDC06[[paste0("year", time(sim))]]
         attributes(sim$MDC06)$YEAR <- time(sim)
@@ -389,7 +374,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
             )
           )
         } else {
-          if (!is.null(sim$MDC06)){
+          if (!is.null(sim$MDC06)) {
             names(sim$MDC06) <- "MDC06"
           } else stop("MDC06 is NULL. Debug fireSense_dataPrep.")
         }
@@ -424,14 +409,14 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                        " `usrEmail` for google authentication"))
     
       prepClimLays <- FALSE
-      if (is.null(sim$MDC06)){
+      if (is.null(sim$MDC06)) {
         prepClimLays <- TRUE
       } else {
-        if (attr(sim$MDC06, "YEAR") != time(sim)){
+        if (attr(sim$MDC06, "YEAR") != time(sim)) {
           prepClimLays <- TRUE
         }
       }
-      if (prepClimLays){
+      if (prepClimLays) {
         sim$MDC06 <- usefulFuns::prepareClimateLayers(authEmail = sim$usrEmail,
                                           pathInputs = inputPath(sim), 
                                           studyArea = sim$studyArea,
@@ -442,7 +427,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                           RCP = P(sim)$RCP,
                                           climateModel = P(sim)$climateModel,
                                           ensemble = P(sim)$ensemble, 
-                                          climateFilePath = P(sim)$climateFilePath,
+                                          climateFilePath = P(sim)$projectedClimateFilePath,
                                           fileResolution = P(sim)$climateResolution)
         sim$MDC06 <- sim$MDC06[[paste0("year", time(sim))]]
         attributes(sim$MDC06)$YEAR <- time(sim)
@@ -466,18 +451,18 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
   dPath <- asPath(getOption("reproducible.destinationPath", inputPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
   
-  if (!suppliedElsewhere("usrEmail", sim)){
+  if (!suppliedElsewhere("usrEmail", sim)) {
     sim$usrEmail <- if (pemisc::user() %in% c("tmichele", "Tati")) "tati.micheletti@gmail.com" else NULL
   }
   
-  if (!suppliedElsewhere(object = "studyArea", sim = sim)){
+  if (!suppliedElsewhere(object = "studyArea", sim = sim)) {
     sim$studyArea <- Cache(prepInputs,
                            url = extractURL("studyArea"),
                            destinationPath = inputPath(sim),
                            cloudFolderID = sim$cloudFolderID,
                            omitArgs = c("destinationPath", "cloudFolderID"))
   }
-  if (!suppliedElsewhere(object = "rasterToMatch", sim = sim)){
+  if (!suppliedElsewhere(object = "rasterToMatch", sim = sim)) {
     sim$rasterToMatch <- Cache(prepInputs, url = extractURL("rasterToMatch"), 
                                studyArea = sim$studyArea,
                                targetFile = "RTM.tif", 
@@ -487,12 +472,12 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                             "useCloud", "overwrite", "filename2"))
   }
   if (any(!suppliedElsewhere(object = "cohortData2001", sim = sim),
-          !suppliedElsewhere(object = "pixelGroupMap2001", sim = sim))){
+          !suppliedElsewhere(object = "pixelGroupMap2001", sim = sim))) {
     stop("Either cohortData2001 or pixelGroupMap2001 was not supplied. Consider running the Biomass_borealDataPrep 
 for 2001 KNN layers")
   }
   if (any(!suppliedElsewhere(object = "cohortData2011", sim = sim),
-          !suppliedElsewhere(object = "pixelGroupMap2011", sim = sim))){
+          !suppliedElsewhere(object = "pixelGroupMap2011", sim = sim))) {
     stop("Either cohortData2011 or pixelGroupMap2011 was not supplied. Consider running the Biomass_borealDataPrep 
 for 2011 KNN layers")
   }
@@ -531,7 +516,7 @@ for 2011 KNN layers")
     )
   }
   
-  if (!suppliedElsewhere("wetLCC", sim)){
+  if (!suppliedElsewhere("wetLCC", sim)) {
     message("wetLCC not supplied. Loading water layer for the NWT...")
     sim$wetLCC <- prepInputs(destinationPath = inputPath(sim), # Or another directory.
                              omitArgs = "destinationPath",
@@ -545,7 +530,7 @@ for 2011 KNN layers")
     )
   }
   
-  if (!suppliedElsewhere("rstLCC", sim)){
+  if (!suppliedElsewhere("rstLCC", sim)) {
     message("rstLCC not supplied. Loading LCC05")
     sim$rstLCC <- Cache(prepInputs, url = paste0("ftp://ftp.ccrs.nrcan.gc.ca/ad/NLCCLandCover/",
                                                  "LandcoverCanada2005_250m/LandCoverOfCanada2005_V1_4.zip"),
@@ -564,6 +549,32 @@ for 2011 KNN layers")
                         omitArgs = c("destinationPath", "filename2"))
   }
   
-
+  if (!suppliedElsewhere("MDC", sim)) {
+    browser()
+    message("MDC not supplied. Looking for potential MDC files in input path")
+    if ( file.exists(file.path(P(sim)$historicalClimateDataInputPath, "MDC_1991_2017.rds"))) {
+      # This file NWT_3ArcMinuteM comes from downloading the specific data from ClimateNA.
+      # While there isn't an API for it, this is a manual step. You will need the DEM for the area
+      # and specify which variables you want (in our case, monthly variables)
+      sim$MDC <- Cache(calculateMDC, pathInputs = file.path(P(sim)$historicalClimateDataInputPath),
+                   years = c(fireYears), droughtMonths = 4:9, rasterToMatch = sim$pixelGroupMap2001,
+                   userTags = c("MDC_1991_2017", "normals_MDC"))
+      
+      saveRDS(sim$MDC, file.path(P(sim)$historicalClimateDataInputPath, "MDC_1991_2017.rds"))
+    } else {
+      sim$MDC <- readRDS(file.path(P(sim)$historicalClimateDataInputPath, "MDC_1991_2017.rds"))
+      # Fixing Caching and moving rasters problem
+      #IE I think this chunk is the wrong solution to whatever this problem is.
+      #Paths$inputPath had to be changed - 
+      if (!file.exists(filename(sim$MDC$Year1991$MDC_1991$MDC_1991))) 
+        sim$MDC <- lapply(MDC, function(yr) {
+          r <- yr[[1]]
+          r@file@name <- gsub("^.*(MDC_.*)$", file.path(P(sim)$historicalClimateDataInputPath, "\\1"), 
+                              yr[[1]][[1]]@file@name)
+          return(r)
+        })
+    }
+  }
+  
   return(invisible(sim))
 }

@@ -1,9 +1,9 @@
-calculateMDC <- function(pathInputs, doughtMonths = 4:9, years, 
+calculateMDC <- function(pathInputs, droughtMonths = 4:9, years, 
                          rasterToMatch = NULL, studyArea = NULL, 
                          returnTable = TRUE){
   library(data.table)
-  variables <- c(paste0("Tmax0", doughtMonths), paste0("PPT0", 
-                                                       doughtMonths))
+  variables <- c(paste0("Tmax0", droughtMonths), paste0("PPT0", 
+                                                       droughttMonths))
   
   yearsList <- lapply(X = years, FUN = function(y){ # future
     
@@ -28,10 +28,10 @@ calculateMDC <- function(pathInputs, doughtMonths = 4:9, years,
       # •	Monthly: Tmax, Tmin, Tave and Rad.'
       variablesStack <- raster::stack(lapply(names(variablesStack), function(lay){
         if (lay %in% c("MAT", "MWMT", "MCMT", "TD", "AHM", "SHM", "EMT", "EXT", "MAR",
-                       paste0("Tmax0", doughtMonths),
-                       paste0("Tmin0", doughtMonths),
-                       paste0("Tave0", doughtMonths),
-                       paste0("Rad0", doughtMonths),
+                       paste0("Tmax0", droughttMonths),
+                       paste0("Tmin0", droughttMonths),
+                       paste0("Tave0", droughttMonths),
+                       paste0("Rad0", droughttMonths),
                        paste0("Rad_", c("wt", "sm", "at", "sp")),
                        paste0("Tmax_", c("wt", "sm", "at", "sp")),
                        paste0("Tmin_", c("wt", "sm", "at", "sp")),
@@ -67,7 +67,7 @@ calculateMDC <- function(pathInputs, doughtMonths = 4:9, years,
       # remove the variables from rasterStack for faster operations
       dt <- na.omit(data.table(raster::getValues(variablesStack), pixelID = 1:ncell(variablesStack)))
       dt[,MDC_0 := 0]
-      for (Month in doughtMonths){
+      for (Month in droughttMonths){
         dt[, MDC_m := pmax(MDC_0 + .25 * nDays(Month) * (.36 * eval(parse(text = paste0("Tmax0", Month))) + L_f(Month)) -
                              400 * log(1 + 3.937 * .83 * eval(parse(text = paste0("PPT0", Month))) / (800 * exp(-MDC_0/400))) +
                              .25 * nDays(Month) * (.36 * eval(parse(text = paste0("Tmax0", Month))) + L_f(Month)),0)]
