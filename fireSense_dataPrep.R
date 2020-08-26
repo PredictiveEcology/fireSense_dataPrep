@@ -298,8 +298,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
         sim$MDC06 <- prepareClimateLayersWithBackup(authEmail = sim$usrEmail,
                                                       pathInputs = file.path(inputPath(sim), 
                                                                              paste(P(sim)$climateModel, 
-                                                                                   paste0("RCP", 
-                                                                                          P(sim)$RCP), 
+                                                                                   P(sim)$RCP, 
                                                                                    sep = "_")), 
                                                       studyArea = sim$studyArea,
                                                       rasterToMatch = sim$rasterToMatch, 
@@ -308,8 +307,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                                       model = "fireSense",
                                                       backupFolder = file.path(inputPath(sim), 
                                                                                paste(P(sim)$climateModel, 
-                                                                                     paste0("RCP", 
-                                                                                            P(sim)$RCP), 
+                                                                                     P(sim)$RCP, 
                                                                                      sep = "_"),
                                                                                "backup"), 
                                                       # <~~~~~~~~~~~~~~~~~~~~~ ADDED 
@@ -447,7 +445,10 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       }
       if (prepClimLays){
         sim$MDC06 <- prepareClimateLayersWithBackup(authEmail = sim$usrEmail,
-                                          pathInputs = inputPath(sim), 
+                                          pathInputs = file.path(inputPath(sim), 
+                                                                 paste(P(sim)$climateModel, 
+                                                                       P(sim)$RCP, 
+                                                                       sep = "_")), 
                                           studyArea = sim$studyArea,
                                           rasterToMatch = sim$rasterToMatch, 
                                           years = time(sim),
@@ -455,8 +456,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                           model = "fireSense",
                                           backupFolder = file.path(inputPath(sim), 
                                                                    paste(P(sim)$climateModel, 
-                                                                         paste0("RCP", 
-                                                                                P(sim)$RCP), 
+                                                                         P(sim)$RCP, 
                                                                          sep = "_"),
                                                                    "backup"), 
                                           # <~~~~~~~~~~~~~~~~~~~~~ ADDED 
