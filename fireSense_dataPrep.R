@@ -239,7 +239,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # Create the classification. Repeat with 2011
       # source(file.path(getwd(), "modules/fireSense_dataPrep/R/classifyCohortsFireSenseSpread.R')) 
       # Needs to be: 1) made flexible; 2) put in fireSenseUtils
-      
+      browser()
       classList2001 <- fireSenseUtils::classifyCohortsFireSenseSpread(sim$cohortData2001,
                                                                       yearCohort = 2001,
                                                                       pixelGroupMap = sim$pixelGroupMap2001,
@@ -402,9 +402,11 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       sim$dataFireSense_SpreadPredict <- raster::stack(
         classifyCohortsFireSenseSpread(
           cohortData = currentCohortData,
-          year = time(sim),
+          yearCohort = time(sim),
           pixelGroupMap = sim$pixelGroupMap,
-          flammable = sim$flammableRTM)
+          flammableMap = sim$flammableRTM,
+          sppEquiv = sim$sppEquiv,
+          sppEquivCol = P(sim)$sppEquivCol)
         )
       # We need to: 
       # 1) Add zeros to where we don't have proportions (currently NA)
@@ -559,7 +561,7 @@ for 2011 KNN layers")
                         method = "bilinear",
                         datatype = "INT2U",
                         filename2 = TRUE,
-                        userTags = c(stepCacheTag,
+                        userTags = c(#stepCacheTag, what was this object? doesn't exist.. 
                                      "objectName:rstLCC", "module:fireSense_dataPrep",
                                      "outFun:Cache"),
                         omitArgs = c("destinationPath", "filename2"))
@@ -597,7 +599,7 @@ for 2011 KNN layers")
   
   if (!suppliedElsewhere("flammableRTM", sim)) {
    #This won't work if user supplies their own LCC but not flammable map - worth warning?
-    sim$flammableRTM <- LandR::defineFlammable(LandCoverClassifiedMap = sim$rstLCC, filename2 = NULL)
+    sim$flammableRTM <- LandR::defineFlammable(LandCoverClassifiedMap = sim$rstLCC, mask = sim$rasterToMatch, filename2 = NULL)
   }
   
   return(invisible(sim))
