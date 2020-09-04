@@ -15,7 +15,8 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = deparse(list("README.txt", "fireSense_dataPrep.Rmd")),
   reqdPkgs = list("raster", 
-                  "PredictiveEcology/LandR@development"),
+                  "PredictiveEcology/LandR@development",
+                  'PredictiveEcology/fireSenseUtils'),
   parameters = rbind(
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
                     "Describes the simulation time at which the first plot event should occur."),
@@ -59,7 +60,9 @@ defineModule(sim, list(
     defineParameter(name = 'historicalClimateDataInputPath', class = 'character', 'inputs', NA, NA, 
                     desc = 'path to directory containing historical climate data'), #TODO: how could this work?
     defineParameter(name = "train", class = "logical", default = TRUE,
-                    desc = "train or predict mode. Defaults is TRUE, or train mode.")
+                    desc = "train or predict mode. Defaults is TRUE, or train mode."),
+    defineParameter("sppEquivCol", "character", "Boreal", NA, NA,
+                    "The column in sim$specieEquivalency data.table to use as a naming convention")
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "cohortData2001", objectClass = "data.table", 
@@ -104,7 +107,11 @@ defineModule(sim, list(
                  desc = "Raster of land cover. Defaults to LCC05."),
     expectsInput(objectName = 'MDC',
                  objectClass = 'RasterStack',
-                 desc = 'historical annual maximum MDC (calculated monthly) raster stack')
+                 desc = 'historical annual maximum MDC (calculated monthly) raster stack'),
+    expectsInput(objectName = "sppEquiv",
+                 objectClass = "data.table",
+                 sourceURL = NA,
+                 desc = "table of species equivalencies. See LandR::sppEquivalencies_CA.")
   ),
   outputObjects = bind_rows(
     createsOutput(objectName = "dataFireSense_IgnitionFit", 
@@ -162,7 +169,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # Improving the water and wetlands locations
       sim$rstLCC[sim$wetLCC == 1] <- 37 # LCC05 code for Water bodies
       sim$rstLCC[sim$wetLCC == 2] <- 19 # LCC05 code for Wetlands
-      browser()
+   
       # if (P(sim)$train){
       #   message("train is TRUE, preparing RTM. This should happen only if dataFireSense_EscapeFit 
       #       \nand dataFireSense_FrequencyFit are not being passed.")
@@ -211,6 +218,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # TODO when we work with EscapeFit
     },
     prepSpreadFitData = {
+
       # TODO when we work with SpreadFit --> Coming from the global !runMe.R
       # Go over the code down, pull out what needs to go back to Global and what needs to stay here 
       
@@ -231,14 +239,19 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # Create the classification. Repeat with 2011
       # source(file.path(getwd(), "modules/fireSense_dataPrep/R/classifyCohortsFireSenseSpread.R')) 
       # Needs to be: 1) made flexible; 2) put in fireSenseUtils
-      classList2001 <- classifyCohortsFireSenseSpread(sim$cohortData2001,
-                                                      year = 2001,
-                                                      pixelGroupMap = sim$pixelGroupMap2001,
-                                                      flammable = flammableRTM)
-      classList2011 <- classifyCohortsFireSenseSpread(sim$cohortData2011,
-                                                      year = 2011,
-                                                      pixelGroupMap = sim$pixelGroupMap2011,
-                                                      flammable = flammableRTM)
+      
+      classList2001 <- fireSenseUtils::classifyCohortsFireSenseSpread(sim$cohortData2001,
+                                                                      yearCohort = 2001,
+                                                                      pixelGroupMap = sim$pixelGroupMap2001,
+                                                                      flammableMap = sim$flammableRTM, 
+                                                                      sppEquivCol = P(sim)$sppEquivCol,
+                                                                      sppEquiv = sim$sppEquiv)
+      classList2011 <- fireSenseUtils::classifyCohortsFireSenseSpread(sim$cohortData2011,
+                                                                      yearCohort = 2011,
+                                                                      pixelGroupMap = sim$pixelGroupMap2011,
+                                                                      flammableMap = sim$flammableRTM,
+                                                                      sppEquivCol = P(sim)$sppEquivCol,
+                                                                      sppEquiv = sim$sppEquiv)
       
       # Assign values from 2001 and 2011 veg input layers to annual data
       yearToDivide <- 2005
@@ -384,30 +397,33 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # TODO when we work with EscapePredict --> coming from fireSense_NWT_dataPrep, which will be extinguished
     },
     prepSpreadPredictData = {
-    currentCohortData  <- copy(sim$cohortData)
-    sim$dataFireSense_SpreadPredict <- raster::stack(classifyCohortsFireSenseSpread(
-                                                            cohortData = currentCohortData,
-                                                           year = time(sim),
-                                                           pixelGroupMap = sim$pixelGroupMap,
-                                                           flammable = sim$flammableRTM))
-    # We need to: 
-    # 1) Add zeros to where we don't have proportions (currently NA)
-    sim$dataFireSense_SpreadPredict <- stack(lapply(names(sim$dataFireSense_SpreadPredict), 
-                                                    function(rasName){
-      ras <- sim$dataFireSense_SpreadPredict[[rasName]]
-      ras[rasterToMatch[] == 1 & is.na(ras[])] <- 0 
-      return(ras)
-    })
-    )
-    # 2) Assert that all proportions sum to 1
-    summedRas <- sum(sim$dataFireSense_SpreadPredict)
-    tb <- table(summedRas[])
-    testthat::expect_equal(sort(as.numeric(names(tb))), c(0, 1))
-
+      browser()
+      currentCohortData  <- copy(sim$cohortData)
+      sim$dataFireSense_SpreadPredict <- raster::stack(
+        classifyCohortsFireSenseSpread(
+          cohortData = currentCohortData,
+          year = time(sim),
+          pixelGroupMap = sim$pixelGroupMap,
+          flammable = sim$flammableRTM)
+        )
+      # We need to: 
+      # 1) Add zeros to where we don't have proportions (currently NA)
+      sim$dataFireSense_SpreadPredict <- stack(lapply(names(sim$dataFireSense_SpreadPredict), 
+                                                      function(rasName){
+                                                        ras <- sim$dataFireSense_SpreadPredict[[rasName]]
+                                                        ras[rasterToMatch[] == 1 & is.na(ras[])] <- 0 
+                                                        return(ras)
+                                                      })
+      )
+      # 2) Assert that all proportions sum to 1
+      summedRas <- sum(sim$dataFireSense_SpreadPredict)
+      tb <- table(summedRas[])
+      testthat::expect_equal(sort(as.numeric(names(tb))), c(0, 1))
+      
       if (is.null(sim$usrEmail))
         warning(paste0("If in a non-interactive session, please make sure you supply the object",
                        " `usrEmail` for google authentication"))
-    
+      
       prepClimLays <- FALSE
       if (is.null(sim$MDC06)) {
         prepClimLays <- TRUE
@@ -418,17 +434,17 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       }
       if (prepClimLays) {
         sim$MDC06 <- usefulFuns::prepareClimateLayers(authEmail = sim$usrEmail,
-                                          pathInputs = inputPath(sim), 
-                                          studyArea = sim$studyArea,
-                                          rasterToMatch = sim$rasterToMatch, 
-                                          years = time(sim),
-                                          variables = "fireSense", model = "fireSense",
-                                          returnCalculatedLayersForFireSense = TRUE,
-                                          RCP = P(sim)$RCP,
-                                          climateModel = P(sim)$climateModel,
-                                          ensemble = P(sim)$ensemble, 
-                                          climateFilePath = P(sim)$projectedClimateFilePath,
-                                          fileResolution = P(sim)$climateResolution)
+                                                      pathInputs = inputPath(sim), 
+                                                      studyArea = sim$studyArea,
+                                                      rasterToMatch = sim$rasterToMatch, 
+                                                      years = time(sim),
+                                                      variables = "fireSense", model = "fireSense",
+                                                      returnCalculatedLayersForFireSense = TRUE,
+                                                      RCP = P(sim)$RCP,
+                                                      climateModel = P(sim)$climateModel,
+                                                      ensemble = P(sim)$ensemble, 
+                                                      climateFilePath = P(sim)$projectedClimateFilePath,
+                                                      fileResolution = P(sim)$climateResolution)
         sim$MDC06 <- sim$MDC06[[paste0("year", time(sim))]]
         attributes(sim$MDC06)$YEAR <- time(sim)
         names(sim$MDC06) <- "MDC06"
@@ -547,10 +563,13 @@ for 2011 KNN layers")
                                      "objectName:rstLCC", "module:fireSense_dataPrep",
                                      "outFun:Cache"),
                         omitArgs = c("destinationPath", "filename2"))
+  } else {
+    if (suppliedElsewhere("flammableRTM", sim)) {
+      stop("You have provided your own LCC - please provide a corresponding flammableRTM")
+    }
   }
   
   if (!suppliedElsewhere("MDC", sim)) {
-    browser()
     message("MDC not supplied. Looking for potential MDC files in input path")
     if ( file.exists(file.path(P(sim)$historicalClimateDataInputPath, "MDC_1991_2017.rds"))) {
       # This file NWT_3ArcMinuteM comes from downloading the specific data from ClimateNA.
@@ -574,6 +593,11 @@ for 2011 KNN layers")
           return(r)
         })
     }
+  }
+  
+  if (!suppliedElsewhere("flammableRTM", sim)) {
+   #This won't work if user supplies their own LCC but not flammable map - worth warning?
+    sim$flammableRTM <- LandR::defineFlammable(LandCoverClassifiedMap = sim$rstLCC, filename2 = NULL)
   }
   
   return(invisible(sim))
