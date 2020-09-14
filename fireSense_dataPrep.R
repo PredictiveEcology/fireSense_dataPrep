@@ -36,6 +36,10 @@ defineModule(sim, list(
                                 "fireSense_SpreadFit", "fireSense_SpreadPredict"), NA, NA,
                     paste("For which fireSense modules this data preparation process should",
                           "be ran? Defaults for all 6 modules.")),
+    defineParameter(name = "fireYears", class = "integer",
+                    default = 1991:2017,
+                    desc = "A numeric vector indicating which years should be extracted
+                    from the fire databases to use for fitting"),
     defineParameter("predictionInterval", "numeric", 1, NA, NA,
                     "This describes the simulation time interval between prediction events."),
     defineParameter(name = "RCP", class = "character", default = "85", 
@@ -224,7 +228,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       
       # source(file.path(getwd(), "modules/fireSense_dataPrep/R/calculateMDC.R")) 
       # # Needs to go to fireSenseUtils
-      fireYears <- 1991:2017
+      fireYears <- P(sim)$fireYears
       names(fireYears) <- as.character(fireYears)
       # plan("multiprocess", workers = length(fireYears))
 
@@ -239,7 +243,6 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # Create the classification. Repeat with 2011
       # source(file.path(getwd(), "modules/fireSense_dataPrep/R/classifyCohortsFireSenseSpread.R')) 
       # Needs to be: 1) made flexible; 2) put in fireSenseUtils
-      browser()
       classList2001 <- fireSenseUtils::classifyCohortsFireSenseSpread(sim$cohortData2001,
                                                                       yearCohort = 2001,
                                                                       pixelGroupMap = sim$pixelGroupMap2001,
@@ -397,7 +400,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # TODO when we work with EscapePredict --> coming from fireSense_NWT_dataPrep, which will be extinguished
     },
     prepSpreadPredictData = {
-      browser()
+      
       currentCohortData  <- copy(sim$cohortData)
       sim$dataFireSense_SpreadPredict <- raster::stack(
         classifyCohortsFireSenseSpread(
@@ -500,20 +503,17 @@ for 2001 KNN layers")
 for 2011 KNN layers")
   }
   
-  if (!suppliedElsewhere(object = "firePolys", sim = sim))
-  {
-    sim$firePolys <- Cache(
-      prepInputs, 
-      archive = "NFDB_poly.zip",
-      alsoExtract = "similar",
-      url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_poly/current_version/NFDB_poly.zip",
-      fun = "sf::st_read",
-      destinationPath = inputPath(sim),
-      studyArea = sim$studyArea,
-      useSAcrs = TRUE,
-      filename2 = NULL,
-      userTags = c("module:fireSense_NWT_DataPrep",
-                   "objectName:NFDB_PO"))
+  if (!suppliedElsewhere("firePolys", sim)){
+    browser()
+    sim$firePolys <- Cache(getFirePolygons, years = P(sim)$fireYears,
+                           studyArea = aggregate(sim$studyArea),
+                           userTags = c("firePolys", paste0('years':range(P(sim)$fireYears)))
+    )
+    # THere are duplicate NFIREID
+    sim$firePolys <- Cache(lapply, sim$firePolys, function(x) {
+      x <- spTransform(x, crs(sim$studyArea))
+      x <- x[!duplicated(x$NFIREID),]
+    })
   }
   
   if (!suppliedElsewhere(object = "firePoints", sim = sim))
