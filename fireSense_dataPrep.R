@@ -86,6 +86,13 @@ defineModule(sim, list(
     expectsInput(objectName = "cohortData", objectClass = "data.table", 
                  desc = paste0("Table that defines the cohorts by pixelGroup"), 
                  sourceURL = NA), 
+    expectsInput(objectName = "firePolys",
+                 objectClass = "list",
+                 sourceURL = NA_character_,
+                 desc = paste0("List of SpatialPolygonsDataFrames representing annual fire polygons.",
+                               "This defaults to https://cwfis.cfs.nrcan.gc.ca/downloads/nbac/ and uses ",
+                               "the most current versions of the database (Nov or Sept 2019)")
+    ),
     expectsInput(objectName = "pixelGroupMap", objectClass = "RasterLayer", 
                  desc = paste0("RasterLayer that defines the pixelGroups for cohortData table"), 
                  sourceURL = NA), 
@@ -504,10 +511,10 @@ for 2011 KNN layers")
   }
   
   if (!suppliedElsewhere("firePolys", sim)){
-    browser()
     sim$firePolys <- Cache(getFirePolygons, years = P(sim)$fireYears,
                            studyArea = aggregate(sim$studyArea),
-                           userTags = c("firePolys", paste0('years':range(P(sim)$fireYears)))
+                           pathInputs = dPath, 
+                           userTags = c("firePolys", paste0('years:', range(P(sim)$fireYears)))
     )
     # THere are duplicate NFIREID
     sim$firePolys <- Cache(lapply, sim$firePolys, function(x) {
