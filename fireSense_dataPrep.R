@@ -267,9 +267,9 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       yearToDivide <- 2005
        
       classList <- list(classList2001, classList2011)
-      names(classList) <- c(paste0(fireYears[fireYears < yearToDivide], collapse = "_"),
-                            paste0(fireYears[fireYears >= yearToDivide], collapse = "_"))
 
+      names(classList) <- c('fireYearsPre2005', 'fireYearsPost2005')
+      
       weather <- stackToMemory(MDC)
       weather <- raster::unstack(weather)
       names(weather) <- as.character(fireYears)
