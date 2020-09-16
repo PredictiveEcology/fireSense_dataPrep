@@ -515,28 +515,10 @@ for 2011 KNN layers")
   }
   
   if (!suppliedElsewhere("firePolys", sim)){
-    sim$firePolys <- Cache(getFirePolygons, years = P(sim)$fireYears,
-                           studyArea = aggregate(sim$studyArea),
-                           pathInputs = dPath, 
-                           userTags = c("firePolys", paste0('years:', range(P(sim)$fireYears)))
-    )
-    # THere are duplicate NFIREID
-    sim$firePolys <- Cache(lapply, sim$firePolys, function(x) {
-      x <- spTransform(x, crs(sim$studyArea))
-      x <- x[!duplicated(x$NFIREID),]
-    })
-  }
-  
-  if (!suppliedElsewhere("firePolys", sim)){
-    browser()
+    
     sim$firePolys <- Cache(getFirePolygons, years = P(sim)$fireYears,
                            studyArea = aggregate(sim$studyArea),
                            pathInputs = Paths$inputPath, userTags = paste0("years:", range(P(sim)$fireYears)))
-    # THere are duplicate NFIREID
-    sim$firePolys <- Cache(lapply, sim$firePolys, function(x) {
-      x <- spTransform(x, crs(sim$studyArea))
-      x <- x[!duplicated(x$NFIREID),]
-    })
   }
   if (isTRUE(P(sim)$useCentroids)) {
     if (!suppliedElsewhere("firePoints", sim)){
