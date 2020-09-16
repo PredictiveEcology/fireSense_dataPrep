@@ -66,7 +66,11 @@ defineModule(sim, list(
     defineParameter(name = "train", class = "logical", default = TRUE,
                     desc = "train or predict mode. Defaults is TRUE, or train mode."),
     defineParameter("sppEquivCol", "character", "Boreal", NA, NA,
-                    "The column in sim$specieEquivalency data.table to use as a naming convention")
+                    "The column in sim$specieEquivalency data.table to use as a naming convention"),
+    defineParameter(name = "useCentroids", class = "logical", default = TRUE,
+                    desc = paste("Should fire ignitions start at the sim$firePolygons",
+                                 "centroids (TRUE) or at the ignition points in the",
+                                 "sim$firePoints"))
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "cohortData2001", objectClass = "data.table", 
@@ -523,38 +527,53 @@ for 2011 KNN layers")
     })
   }
   
-  if (!suppliedElsewhere(object = "firePoints", sim = sim))
-  {
-    sim$firePoints <- Cache(
-      prepInputs, 
-      url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_pnt/current_version/NFDB_point.zip",
-      fun = "sf::st_read",
-      destinationPath = inputPath(sim),
-      archive = "NFDB_point.zip",
-      alsoExtract = "similar",
-      omitArgs = "destinationPath",
-      studyArea = sim$studyArea,
-      useSAcrs = TRUE,
-      filename2 = NULL,
-      userTags = c("module:fireSense_NWT_DataPrep",
-                   "objectName:firePoints")
-    )
+  if (!suppliedElsewhere("firePolys", sim)){
+    browser()
+    sim$firePolys <- Cache(getFirePolygons, years = P(sim)$fireYears,
+                           studyArea = aggregate(sim$studyArea),
+                           pathInputs = Paths$inputPath, userTags = paste0("years:", range(P(sim)$fireYears)))
+    # THere are duplicate NFIREID
+    sim$firePolys <- Cache(lapply, sim$firePolys, function(x) {
+      x <- spTransform(x, crs(sim$studyArea))
+      x <- x[!duplicated(x$NFIREID),]
+    })
+  }
+  if (isTRUE(P(sim)$useCentroids)) {
+    if (!suppliedElsewhere("firePoints", sim)){
+      message("... preparing polyCentroids")
+      yr <- min(P(sim)$fireYears)
+      sim$firePoints <- Cache(mclapply, X = sim$firePolys, 
+                              mc.cores = pemisc::optimalClusterNum(2e3, maxNumClusters = length(sim$firePolys)),
+                              function(X){
+                                print(yr)
+                                ras <- X
+                                ras$ID <- 1:NROW(ras)
+                                centCoords <- rgeos::gCentroid(ras, byid = TRUE)
+                                cent <- SpatialPointsDataFrame(centCoords, 
+                                                               as.data.frame(ras))
+                                yr <<- yr + 1
+                                return(cent)
+                              },
+                              userTags = c("what:polyCentroids", "forWhat:fireSense_SpreadFit"),
+                              omitArgs = c("userTags", "mc.cores", "useCloud", "cloudFolderID"))
+      names(sim$firePoints) <- names(sim$firePolys)
+    }
+  } else {
+    
+    if (!suppliedElsewhere("firePoints", sim)){
+      sim$firePoints <- Cache(getFirePoints_NFDB,
+                              url = "http://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_pnt/current_version/NFDB_point.zip",
+                              studyArea = sim$studyArea,
+                              rasterToMatch = sim$rasterToMatch,
+                              NFDB_pointPath = file.path(Paths$inputPath, "NFDB_point"),
+                              years = P(sim)$fireYears,
+                              userTags = c("what:firePoints", "forWhat:fireSense_SpreadFit"))
+      crs(sim$firePoints) <- crs(sim$rasterToMatch)
+      names(sim$firePoints) <- names(sim$firePolys)
+    }
   }
   
-  if (!suppliedElsewhere("wetLCC", sim)) {
-    message("wetLCC not supplied. Loading water layer for the NWT...")
-    sim$wetLCC <- prepInputs(destinationPath = inputPath(sim), # Or another directory.
-                             omitArgs = "destinationPath",
-                             url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
-                             targetFile = "wetlandsNWT250m.tif",
-                             rasterToMatch = sim[["rasterToMatch"]],
-                             maskWithRTM = TRUE,
-                             filename2 = NULL,
-                             userTags = c("module:fireSense_NWT_DataPrep",
-                                          "objectName:wetLCC")
-    )
-  }
-  
+
   if (!suppliedElsewhere("rstLCC", sim)) {
     message("rstLCC not supplied. Loading LCC05")
     sim$rstLCC <- Cache(prepInputs, url = paste0("ftp://ftp.ccrs.nrcan.gc.ca/ad/NLCCLandCover/",
