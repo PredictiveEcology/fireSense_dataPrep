@@ -95,7 +95,8 @@ defineModule(sim, list(
                  sourceURL = NA_character_,
                  desc = paste0("List of SpatialPolygonsDataFrames representing annual fire polygons.",
                                "This defaults to https://cwfis.cfs.nrcan.gc.ca/downloads/nbac/ and uses ",
-                               "the most current versions of the database (Nov or Sept 2019)")
+                               "the most current versions of the database (Nov or Sept 2019).",
+                               "List must be named with followign convention: 'year<numeric year>'")
     ),
     expectsInput(objectName = "pixelGroupMap", objectClass = "RasterLayer", 
                  desc = paste0("RasterLayer that defines the pixelGroups for cohortData table"), 
@@ -285,6 +286,8 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       nonAnnualRasters <- mapply(c, classList, SIMPLIFY = FALSE)
       nonAnnualStacks <- lapply(nonAnnualRasters, raster::stack)
       rm(nonAnnualRasters)
+      names(annualStacks) <- paste0("year", P(sim)$fireYears) #this is important, must be consistent with firePolys
+      annualStacks <- annualStacks[names(annualStacks) %in% names(sim$firePolys)]
       sim$dataFireSense_SpreadFit <- list(annualStacks = annualStacks, 
                                          nonAnnualStacks = nonAnnualStacks) 
       
@@ -480,6 +483,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
 }
 
 .inputObjects <- function(sim) {
+
   dPath <- asPath(getOption("reproducible.destinationPath", inputPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
   
@@ -539,6 +543,7 @@ for 2011 KNN layers")
                               userTags = c("what:polyCentroids", "forWhat:fireSense_SpreadFit"),
                               omitArgs = c("userTags", "mc.cores", "useCloud", "cloudFolderID"))
       names(sim$firePoints) <- names(sim$firePolys)
+
     }
   } else {
     
@@ -554,8 +559,14 @@ for 2011 KNN layers")
       names(sim$firePoints) <- names(sim$firePolys)
     }
   }
-  
 
+  min1Fire <- lapply(sim$firePoints, length) > 0
+  sim$firePoints <- sim$firePoints[min1Fire]
+  sim$firePolys <- sim$firePolys[min1Fire]
+  if (length(sim$firePolys) != length(sim$firePoints)) {
+    stop("mismatched years between firePolys and firePoints")
+  }
+  
   if (!suppliedElsewhere("rstLCC", sim)) {
     message("rstLCC not supplied. Loading LCC05")
     sim$rstLCC <- Cache(prepInputs, url = paste0("ftp://ftp.ccrs.nrcan.gc.ca/ad/NLCCLandCover/",
@@ -580,30 +591,8 @@ for 2011 KNN layers")
   }
   
   if (!suppliedElsewhere("MDC", sim)) {
-    message("MDC not supplied. Looking for potential MDC files in input path")
-    if ( file.exists(file.path(P(sim)$historicalClimateDataInputPath, "MDC_1991_2017.rds"))) {
-      # This file NWT_3ArcMinuteM comes from downloading the specific data from ClimateNA.
-      # While there isn't an API for it, this is a manual step. You will need the DEM for the area
-      # and specify which variables you want (in our case, monthly variables)
-      sim$MDC <- Cache(calculateMDC, pathInputs = file.path(P(sim)$historicalClimateDataInputPath),
-                   years = c(fireYears), droughtMonths = 4:9, rasterToMatch = sim$pixelGroupMap2001,
-                   userTags = c("MDC_1991_2017", "normals_MDC"))
-      
-      saveRDS(sim$MDC, file.path(P(sim)$historicalClimateDataInputPath, "MDC_1991_2017.rds"))
-    } else {
-      sim$MDC <- readRDS(file.path(P(sim)$historicalClimateDataInputPath, "MDC_1991_2017.rds"))
-      # Fixing Caching and moving rasters problem
-      #IE I think this chunk is the wrong solution to whatever this problem is.
-      #Paths$inputPath had to be changed - 
-      if (!file.exists(filename(sim$MDC$Year1991$MDC_1991$MDC_1991))) 
-        sim$MDC <- lapply(MDC, function(yr) {
-          r <- yr[[1]]
-          r@file@name <- gsub("^.*(MDC_.*)$", file.path(P(sim)$historicalClimateDataInputPath, "\\1"), 
-                              yr[[1]][[1]]@file@name)
-          return(r)
-        })
+    stop("MDC not supplied. Please supply this object, there is no default at this time")
     }
-  }
   
   if (!suppliedElsewhere("flammableRTM", sim)) {
    #This won't work if user supplies their own LCC but not flammable map - worth warning?
