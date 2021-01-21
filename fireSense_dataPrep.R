@@ -14,7 +14,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.txt", "fireSense_dataPrep.Rmd")),
-  reqdPkgs = list("raster", 
+  reqdPkgs = list("raster", "googledrive", "crayon", "sf",
                   "PredictiveEcology/LandR@development",
                   "tati-micheletti/usefulFuns@fileMystery"), # <~~~~~~~~~~~~~~~~~~~~~~~~ HERE
   parameters = rbind(
@@ -58,7 +58,9 @@ defineModule(sim, list(
                     desc = paste("URL to zipped climate file coming from ClimateNA, containing all",
                                  "climate variables for all years of simulation")),
     defineParameter(name = "train", class = "logical", default = TRUE,
-                    desc = "train or predict mode. Defaults is TRUE, or train mode.")
+                    desc = "train or predict mode. Defaults is TRUE, or train mode."),
+    defineParameter(name = "overwriteClimateLayers", class = "logical", default = FALSE,
+                    desc = "Should overwrite the climate layers from prepClimateLayersWithBackup?")
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "cohortData2001", objectClass = "data.table", 
@@ -130,11 +132,7 @@ defineModule(sim, list(
     createsOutput(objectName = "MDC06", 
                   objectClass = "RasterStack", 
                   desc = paste0("Calculated MDC for June ",
-                                "To be used by ignition, escape(?) and spread predictions.")),
-    expectsInput(objectName = "rstLCC",
-                 objectClass = "RasterLayer",
-                 sourceURL = NA,
-                 desc = "Raster of land cover. Defaults to LCC05.")
+                                "To be used by ignition, escape(?) and spread predictions."))
     )
 ))
 
@@ -147,18 +145,16 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # 
       # REVISE THE CODE IN THE INIT. CAME FROM fireSense_NWT_dataPrep and
       # needs to be revised!
-      # wetLCC code for Water 1
-      # wetLCC code for Wetlands 2
-      # wetLCC code for Uplands 3
-      
-      message("Reclassifying water in LCC05...")
+
+      message("Reclassifying water in LCC...")
       testthat::expect_false(is.null(sim$rstLCC), 
                              label = "rstLCC is still NULL. Please debug .inputObjects") # Assertion
       
       # We are modifying these layers in the simList so we get this propagated accross all modules
       # Improving the water and wetlands locations
-      sim$rstLCC[sim$wetLCC == 1] <- 37 # LCC05 code for Water bodies
-      sim$rstLCC[sim$wetLCC == 2] <- 19 # LCC05 code for Wetlands
+      sim$rstLCC[sim$waterRaster == 1] <- 37 # LCC05 code for Water bodies
+      # I commented out because this is a HUGE mistake!! Makes us NOT predict for lowlands AT ALL!!
+      # sim$rstLCC[sim$wetLCC == 2] <- 19 # LCC05 code for Wetlands
       
       if (P(sim)$train){
         message("train is TRUE, preparing RTM. This should happen only if dataFireSense_EscapeFit 
@@ -222,7 +218,8 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
         # While there isn't an API for it, this is a manual step. You will need the DEM for the area
         # and specify which variables you want (in our case, monthly variables)
         MDC <- Cache(calculateMDC, pathInputs = file.path(Paths$inputPath),
-                     years = c(fireYears), doughtMonths = 4:9, rasterToMatch = pixelGroupMap2001,
+                     years = c(fireYears), doughtMonths = 4:9, 
+                     rasterToMatch = pixelGroupMap2001,
                      userTags = c("MDC_1991_2017", "normals_MDC"))
 
         saveRDS(MDC, file.path(Paths$inputPath, "MDC_1991_2017.rds"))
@@ -280,7 +277,8 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       ######################################
     },
     prepIgnitionPredictData = {
-      # TODO when we work with IgnitionPredict --> coming from fireSense_NWT_dataPrep, which will be extinguished
+      # TODO when we work with IgnitionPredict --> coming from fireSense_NWT_dataPrep, 
+      # which will be extinguished
 
       if (is.null(sim$usrEmail))
         warning(paste0("If in a non-interactive session, please make sure you supply the object",
@@ -295,7 +293,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
         }
       }
       if (prepClimLays){
-        sim$MDC06 <- prepareClimateLayersWithBackup(authEmail = sim$usrEmail,
+        sim$MDC06 <- prepClimateLayersWithBackup(authEmail = sim$usrEmail,
                                                       pathInputs = file.path(inputPath(sim), 
                                                                              paste(P(sim)$climateModel, 
                                                                                    P(sim)$RCP, 
@@ -312,7 +310,9 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                                                                "backup"), 
                                                       # <~~~~~~~~~~~~~~~~~~~~~ ADDED 
                                                       returnCalculatedLayersForFireSense = TRUE,
+                                                 tag = "Calc_NT1BCR6",
                                                       RCP = P(sim)$RCP,
+                                                 overwrite = P(sim)$overwriteClimateLayers,
                                                       climateModel = P(sim)$climateModel,
                                                       ensemble = P(sim)$ensemble, 
                                                       climateFilePath = P(sim)$climateFilePath,
@@ -410,6 +410,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
       # TODO when we work with EscapePredict --> coming from fireSense_NWT_dataPrep, which will be extinguished
     },
     prepSpreadPredictData = {
+      
     currentCohortData  <- copy(sim$cohortData)
     classCohorts <- classifyCohortsFireSenseSpread(cohortData = currentCohortData,
                                                    year = time(sim),
@@ -444,7 +445,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
         }
       }
       if (prepClimLays){
-        sim$MDC06 <- prepareClimateLayersWithBackup(authEmail = sim$usrEmail,
+        sim$MDC06 <- prepClimateLayersWithBackup(authEmail = sim$usrEmail,
                                           pathInputs = file.path(inputPath(sim), 
                                                                  paste(P(sim)$climateModel, 
                                                                        P(sim)$RCP, 
@@ -461,7 +462,9 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                                                    "backup"), 
                                           # <~~~~~~~~~~~~~~~~~~~~~ ADDED 
                                           returnCalculatedLayersForFireSense = TRUE,
+                                          overwrite = P(sim)$overwriteClimateLayers,
                                           RCP = P(sim)$RCP,
+                                          tag = "Calc_NT1BCR6",
                                           climateModel = P(sim)$climateModel,
                                           ensemble = P(sim)$ensemble, 
                                           climateFilePath = P(sim)$climateFilePath,
@@ -553,9 +556,9 @@ for 2011 KNN layers")
     )
   }
   
-  if (!suppliedElsewhere("wetLCC", sim)){
-    message("wetLCC not supplied. Loading water layer for the NWT...")
-    sim$wetLCC <- prepInputs(destinationPath = inputPath(sim), # Or another directory.
+  if (!suppliedElsewhere("waterRaster", sim)){
+    message("waterRaster not supplied. Loading water layer for the NWT...")
+    sim$waterRaster <- prepInputs(destinationPath = inputPath(sim), # Or another directory.
                              omitArgs = "destinationPath",
                              url = "https://drive.google.com/file/d/1YVTcIexNk-obATw2ahrgxA6uvIlr-6xm/view",
                              targetFile = "wetlandsNWT250m.tif",
@@ -563,7 +566,7 @@ for 2011 KNN layers")
                              maskWithRTM = TRUE,
                              filename2 = NULL,
                              userTags = c("module:fireSense_NWT_DataPrep",
-                                          "objectName:wetLCC")
+                                          "objectName:waterRaster")
     )
   }
   

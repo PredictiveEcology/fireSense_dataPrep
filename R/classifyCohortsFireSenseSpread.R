@@ -1,4 +1,7 @@
 classifyCohortsFireSenseSpread <- function(cohortData, yearCohort, pixelGroupMap, flammable){
+  if (any(is.null(cohortData), is.null(pixelGroupMap)))
+    stop(paste0("Either cohortData or pixelGroupMap are NULL when reaching the function ",
+                "classifyCohortsFireSenseSpread (fireSense_dataPrep). Please debug."))
   spCode <- c('Pice_Mar', 'Pice_Gla', 'Lari_Lar', 
               'Betu_Pap', 'Popu_Tre', 'Pinu_Ban') 
   # TODO Make it flexible and into a function!

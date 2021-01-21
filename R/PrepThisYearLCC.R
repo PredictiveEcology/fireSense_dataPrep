@@ -12,7 +12,7 @@ PrepThisYearLCC <- function(currentTime,
 
   if (nrow(fires_this_year) > 0) {
     # Setting the burned pixels of LCC05 to category 34 (recent burns)
-    fires_this_yearSF <- st_as_sf(fires_this_year)
+    fires_this_yearSF <- sf::st_as_sf(fires_this_year)
     rasfires_this_year <- fasterize::fasterize(sf = fires_this_yearSF, raster = rstLCC)
     rstLCC[rasfires_this_year == 1] <- 34  # LCC05 code for recent burns
   }
