@@ -16,7 +16,8 @@ defineModule(sim, list(
   documentation = deparse(list("README.txt", "fireSense_dataPrep.Rmd")),
   reqdPkgs = list("raster", "googledrive", "crayon", "sf",
                   "PredictiveEcology/LandR@development",
-                  "tati-micheletti/usefulFuns@fileMystery"), # <~~~~~~~~~~~~~~~~~~~~~~~~ HERE
+                  "tati-micheletti/usefulFuns@fileMystery", 
+                  "tools"), # <~~~~~~~~~~~~~~~~~~~~~~~~ HERE
   parameters = rbind(
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
                     "Describes the simulation time at which the first plot event should occur."),
@@ -60,7 +61,9 @@ defineModule(sim, list(
     defineParameter(name = "train", class = "logical", default = TRUE,
                     desc = "train or predict mode. Defaults is TRUE, or train mode."),
     defineParameter(name = "overwriteClimateLayers", class = "logical", default = FALSE,
-                    desc = "Should overwrite the climate layers from prepClimateLayersWithBackup?")
+                    desc = "Should overwrite the climate layers from prepClimateLayersWithBackup?"),
+    defineParameter(name = "skipMDCprep", class = "logical", default = FALSE,
+                    desc = "Skip the function prepClimateLayersWithBackup? Useful on multiple runs")
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "cohortData2001", objectClass = "data.table", 
@@ -293,30 +296,42 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
         }
       }
       if (prepClimLays){
+      if (P(sim)$skipMDCprep)  {
+        sim$MDC06 <- returnReadyMDC(pathInputs = file.path(dataPath(sim), "MDC"),
+                                    climateModel = P(sim)$climateModel,
+                                    RCP = P(sim)$RCP,
+                                    rasterToMatch = sim$rasterToMatch,
+                                    ensemble = P(sim)$ensemble,
+                                    fileResolution = P(sim)$climateResolution,
+                                    model = "fireSense",
+                                    tag = "Calc_NT1BCR6",
+                                    y = time(sim))
+      }  else {
         sim$MDC06 <- prepClimateLayersWithBackup(authEmail = sim$usrEmail,
-                                                      pathInputs = file.path(inputPath(sim), 
-                                                                             paste(P(sim)$climateModel, 
-                                                                                   P(sim)$RCP, 
-                                                                                   sep = "_")), 
+                                                      pathInputs = file.path(inputPath(sim),
+                                                                             paste(P(sim)$climateModel,
+                                                                                   P(sim)$RCP,
+                                                                                   sep = "_")),
                                                       studyArea = sim$studyArea,
-                                                      rasterToMatch = sim$rasterToMatch, 
+                                                      rasterToMatch = sim$rasterToMatch,
                                                       years = time(sim),
-                                                      variables = "fireSense", 
+                                                      variables = "fireSense",
                                                       model = "fireSense",
-                                                      backupFolder = file.path(inputPath(sim), 
-                                                                               paste(P(sim)$climateModel, 
-                                                                                     P(sim)$RCP, 
+                                                      backupFolder = file.path(inputPath(sim),
+                                                                               paste(P(sim)$climateModel,
+                                                                                     P(sim)$RCP,
                                                                                      sep = "_"),
-                                                                               "backup"), 
-                                                      # <~~~~~~~~~~~~~~~~~~~~~ ADDED 
+                                                                               "backup"),
+                                                      # <~~~~~~~~~~~~~~~~~~~~~ ADDED
                                                       returnCalculatedLayersForFireSense = TRUE,
                                                  tag = "Calc_NT1BCR6",
                                                       RCP = P(sim)$RCP,
                                                  overwrite = P(sim)$overwriteClimateLayers,
                                                       climateModel = P(sim)$climateModel,
-                                                      ensemble = P(sim)$ensemble, 
+                                                      ensemble = P(sim)$ensemble,
                                                       climateFilePath = P(sim)$climateFilePath,
                                                       fileResolution = P(sim)$climateResolution)
+      }
         sim$MDC06 <- sim$MDC06[[paste0("year", time(sim))]]
         attributes(sim$MDC06)$YEAR <- time(sim)
       }
@@ -445,6 +460,17 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
         }
       }
       if (prepClimLays){
+        if (P(sim)$skipMDCprep)  {
+          sim$MDC06 <- returnReadyMDC(pathInputs = file.path(dataPath(sim), "MDC"),
+                                      climateModel = P(sim)$climateModel,
+                                      RCP = P(sim)$RCP,
+                                      rasterToMatch = sim$rasterToMatch,
+                                      ensemble = P(sim)$ensemble,
+                                      fileResolution = P(sim)$climateResolution,
+                                      model = "fireSense",
+                                      tag = "Calc_NT1BCR6",
+                                      y = time(sim))
+        }  else {
         sim$MDC06 <- prepClimateLayersWithBackup(authEmail = sim$usrEmail,
                                           pathInputs = file.path(inputPath(sim), 
                                                                  paste(P(sim)$climateModel, 
@@ -469,6 +495,7 @@ doEvent.fireSense_dataPrep = function(sim, eventTime, eventType) {
                                           ensemble = P(sim)$ensemble, 
                                           climateFilePath = P(sim)$climateFilePath,
                                           fileResolution = P(sim)$climateResolution)
+        }
         sim$MDC06 <- sim$MDC06[[paste0("year", time(sim))]]
         attributes(sim$MDC06)$YEAR <- time(sim)
         names(sim$MDC06) <- "MDC06"
